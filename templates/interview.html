@@ -42,7 +42,7 @@
       </div>
 
       <div class="interviewer-details">
-        <div class="interviewer-name">Sourabh Kumbhar</div>
+        <div class="interviewer-name">Infrabeat Agent</div>
         <div class="interviewer-role">Hiring Manager</div>
         <div class="interviewer-status" id="interviewer-status">
           {% if video_path %}
@@ -124,7 +124,7 @@
     const engVoice = voices.find(v => v.lang.startsWith('en'));
     if (engVoice) utterance.voice = engVoice;
     utterance.onstart = () => {
-      if (statusEl) statusEl.textContent = 'Sourabh is speaking...';
+      if (statusEl) statusEl.textContent = 'Infrabeat Agent is speaking...';
     };
     utterance.onend = () => {
       if (statusEl) statusEl.textContent = 'Now please answer the question.';
@@ -234,7 +234,7 @@
         const engVoice = voices.find(v => v.lang.startsWith('en'));
         if (engVoice) utterance.voice = engVoice;
         utterance.onstart = () => {
-          if (statusEl) statusEl.textContent = 'Sourabh is speaking...';
+          if (statusEl) statusEl.textContent = 'Infrabeat Agent is speaking...';
         };
         utterance.onend = () => {
           if (statusEl) statusEl.textContent = 'Now please answer the question.';
