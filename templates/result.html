@@ -1,0 +1,17 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="card">
+  <h2>Interview Report</h2>
+  {% for item in items %}
+    <section class="result-item">
+      <h3>Question {{ loop.index }}</h3>
+      <div class="question">{{ item.question }}</div>
+      <div class="answer"><strong>Your answer:</strong><br />{{ item.answer }}</div>
+      <div class="evaluation"><strong>Evaluation:</strong><pre>{{ item.evaluation }}</pre></div>
+    </section>
+  {% endfor %}
+
+  <a class="button" href="{{ url_for('index') }}">Start New Interview</a>
+</div>
+{% endblock %}

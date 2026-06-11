@@ -1,0 +1,365 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="card">
+  <h2 id="question-heading">Interview Question</h2>
+  <div class="question" id="question-text">{{ question }}</div>
+
+  <div class="video-grid">
+
+    <!-- AI Interviewer -->
+    <div class="review-card interviewer-card">
+      <div class="interviewer-card-header">AI Interviewer</div>
+      <div class="interviewer-avatar">
+
+        {% if video_path %}
+          {% if video_path.endswith('.mp4') %}
+            <video
+              id="avatar-video"
+              autoplay
+              playsinline
+              style="width:240px; height:240px; border-radius:50%; border:4px solid #7c3aed; object-fit:cover; box-shadow: 0 0 25px rgba(124,58,237,0.5);"
+            >
+              <source src="{{ video_path }}" type="video/mp4">
+            </video>
+          {% else %}
+            <img
+              id="avatar-image"
+              src="{{ video_path }}"
+              alt="Interviewer"
+              style="width:240px; height:240px; border-radius:50%; border:4px solid #7c3aed; object-fit:cover; box-shadow: 0 0 25px rgba(124,58,237,0.5);"
+            />
+          {% endif %}
+        {% else %}
+          <div class="avatar-placeholder">
+            <div class="avatar-circle" id="avatar-circle">AI</div>
+          </div>
+        {% endif %}
+
+        <div class="voice-waves" id="voice-waves">
+          <span></span><span></span><span></span>
+        </div>
+      </div>
+
+      <div class="interviewer-details">
+        <div class="interviewer-name">Sourabh Kumbhar</div>
+        <div class="interviewer-role">Hiring Manager</div>
+        <div class="interviewer-status" id="interviewer-status">
+          {% if video_path %}
+            Watch the interviewer ask your question.
+          {% else %}
+            Click Speak Question to hear the question.
+          {% endif %}
+        </div>
+      </div>
+
+      {% if not video_path %}
+        <button type="button" class="button" id="speak-btn" style="margin-top:15px;">
+          🔊 Speak Question
+        </button>
+      {% endif %}
+    </div>
+
+    <!-- User Camera -->
+    <div class="review-card camera-card">
+      <div class="interviewer-card-header">Your Camera</div>
+      <video id="camera-preview" autoplay muted playsinline></video>
+      <div id="camera-status" class="camera-status">
+        Click enable camera to start your video.
+      </div>
+      <button type="button" id="enable-camera" class="button secondary">
+        Enable Camera
+      </button>
+      <div id="camera-error" class="camera-error"></div>
+      <p class="hint">Allow camera access for a face-to-face interview view.</p>
+    </div>
+
+  </div>
+
+  <!-- Answer Form -->
+  <form id="answer-form">
+    <label for="answer">Your Answer:</label>
+    <textarea
+      id="answer"
+      name="answer"
+      rows="6"
+      placeholder="Speak your answer or type it here..."
+    ></textarea>
+    <div id="answer-status" style="margin-top:8px; font-size:0.92rem; color:#666;">
+      Your speech will be recognized after the question finishes. Click Submit Answer when ready to proceed.
+    </div>
+    <button type="submit" class="button" style="margin-top:12px;">
+      Submit Answer
+    </button>
+  </form>
+
+  <div id="speech-error" class="camera-error"></div>
+  <div id="debug-log" class="debug-log"></div>
+</div>
+
+<script>
+  const cameraPreview = document.getElementById('camera-preview');
+  const cameraError = document.getElementById('camera-error');
+  const cameraStatus = document.getElementById('camera-status');
+  const enableCameraBtn = document.getElementById('enable-camera');
+  const speechError = document.getElementById('speech-error');
+  const answerForm = document.getElementById('answer-form');
+  const answerTextarea = document.getElementById('answer');
+  const questionTextEl = document.getElementById('question-text');
+  const statusEl = document.getElementById('interviewer-status');
+  const answerStatus = document.getElementById('answer-status');
+  const speakBtn = document.getElementById('speak-btn');
+  const avatarVideo = document.getElementById('avatar-video');
+  const sessionId = '{{ session_id }}';
+
+  // ── VOICE (fallback when no video) ─────────────────
+  function speakText(text, onEndCallback) {
+    if (!window.speechSynthesis) return;
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.rate = 0.95;
+    utterance.pitch = 1;
+    utterance.volume = 1;
+    const voices = window.speechSynthesis.getVoices();
+    const engVoice = voices.find(v => v.lang.startsWith('en'));
+    if (engVoice) utterance.voice = engVoice;
+    utterance.onstart = () => {
+      if (statusEl) statusEl.textContent = 'Sourabh is speaking...';
+    };
+    utterance.onend = () => {
+      if (statusEl) statusEl.textContent = 'Now please answer the question.';
+      if (typeof onEndCallback === 'function') {
+        onEndCallback();
+      }
+    };
+    window.speechSynthesis.speak(utterance);
+  }
+
+  window.speechSynthesis.onvoiceschanged = () => {
+    window.speechSynthesis.getVoices();
+  };
+
+  if (speakBtn) {
+    speakBtn.addEventListener('click', () => {
+      speakText(questionTextEl.textContent.trim());
+    });
+  }
+
+  function setAnswerStatus(text) {
+    if (answerStatus) answerStatus.textContent = text;
+  }
+
+  function getSpeechRecognition() {
+    const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!Recognition) return null;
+
+    const recognition = new Recognition();
+    recognition.continuous = false;
+    recognition.interimResults = false;
+    recognition.lang = 'en-US';
+    recognition.maxAlternatives = 1;
+    return recognition;
+  }
+
+  let recognition = null;
+  let speechRecognitionActive = false;
+
+  async function startSpeechRecognition() {
+    if (speechRecognitionActive) return;
+    if (!recognition) recognition = getSpeechRecognition();
+    if (!recognition) {
+      setAnswerStatus('Speech recognition not supported. Type your answer and press Enter.');
+      return;
+    }
+
+    recognition.onstart = () => {
+      speechRecognitionActive = true;
+      setAnswerStatus('Listening for your answer...');
+      if (statusEl) statusEl.textContent = 'Listening for your answer...';
+    };
+
+    recognition.onresult = async (event) => {
+      const transcript = Array.from(event.results)
+        .map(result => result[0].transcript)
+        .join(' ');
+      answerTextarea.value = transcript;
+      setAnswerStatus('Speech recognized. Click Submit Answer to proceed.');
+    };
+
+    recognition.onspeechend = () => {
+      setAnswerStatus('Speech ended. Processing...');
+    };
+
+    recognition.onend = () => {
+      speechRecognitionActive = false;
+    };
+
+    recognition.onerror = (event) => {
+      speechRecognitionActive = false;
+      setAnswerStatus('Voice recognition failed. Please type your answer and press Enter.');
+      if (statusEl) statusEl.textContent = 'Voice recognition failed.';
+      console.error('Speech recognition error', event.error || event);
+    };
+
+    try {
+      recognition.start();
+    } catch (error) {
+      setAnswerStatus('Unable to start speech recognition. Type your answer and press Enter.');
+      console.error('Speech recognition start error', error);
+    }
+  }
+
+  function stopSpeechRecognition() {
+    if (recognition && speechRecognitionActive) {
+      recognition.abort();
+      speechRecognitionActive = false;
+    }
+  }
+
+  function scheduleSpeechRecognition() {
+    if (avatarVideo) {
+      avatarVideo.addEventListener('ended', () => {
+        if (statusEl) statusEl.textContent = 'Question finished. Please answer now.';
+        answerTextarea.focus();
+        setAnswerStatus('Ready to listen. Speak now or type your answer.');
+        startSpeechRecognition();
+      });
+    } else {
+      window.addEventListener('load', () => {
+        const utterance = new SpeechSynthesisUtterance(questionTextEl.textContent.trim());
+        utterance.rate = 0.95;
+        utterance.pitch = 1;
+        utterance.volume = 1;
+        const voices = window.speechSynthesis.getVoices();
+        const engVoice = voices.find(v => v.lang.startsWith('en'));
+        if (engVoice) utterance.voice = engVoice;
+        utterance.onstart = () => {
+          if (statusEl) statusEl.textContent = 'Sourabh is speaking...';
+        };
+        utterance.onend = () => {
+          if (statusEl) statusEl.textContent = 'Now please answer the question.';
+          setAnswerStatus('Ready to listen. Speak now or type your answer.');
+          startSpeechRecognition();
+        };
+        window.speechSynthesis.speak(utterance);
+      });
+    }
+  }
+
+  scheduleSpeechRecognition();
+
+  // ── CAMERA ─────────────────────────────────────────
+  function initCamera() {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      cameraError.textContent = 'Camera not supported.';
+      return;
+    }
+    cameraStatus.textContent = 'Requesting camera access...';
+    navigator.mediaDevices.getUserMedia({ video: true, audio: false })
+      .then(stream => {
+        cameraPreview.srcObject = stream;
+        cameraPreview.play().catch(() => {});
+        cameraStatus.textContent = 'Camera enabled.';
+      })
+      .catch(() => {
+        cameraError.textContent = 'Camera access denied.';
+        cameraStatus.textContent = 'Camera unavailable.';
+      });
+  }
+
+  enableCameraBtn.addEventListener('click', () => initCamera());
+
+  // ── SUBMIT ANSWER ──────────────────────────────────
+  async function submitAnswer(answer) {
+    try {
+      const response = await fetch(`/answer/${sessionId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ answer })
+      });
+      if (!response.ok) throw new Error('Submission failed');
+      return await response.json();
+    } catch (error) {
+      speechError.textContent = error.message;
+      return null;
+    }
+  }
+
+  // Update avatar video for next question
+  function updateAvatarVideo(videoPath) {
+    stopSpeechRecognition();
+    if (statusEl) statusEl.textContent = 'Loading next question...';
+    setAnswerStatus('');
+    
+    if (avatarVideo && videoPath) {
+      const handleQuestionEnd = () => {
+        if (statusEl) statusEl.textContent = 'Question finished. Please answer now.';
+        answerTextarea.focus();
+        setAnswerStatus('Ready to listen. Speak now or type your answer.');
+        startSpeechRecognition();
+      };
+      
+      avatarVideo.onloadedmetadata = () => {
+        if (statusEl) statusEl.textContent = 'Watch the interviewer ask your question.';
+      };
+      
+      avatarVideo.onended = handleQuestionEnd;
+      
+      avatarVideo.onerror = () => {
+        speakText(questionTextEl.textContent.trim(), handleQuestionEnd);
+      };
+      
+      avatarVideo.src = `/static/${videoPath}`;
+      avatarVideo.load();
+      avatarVideo.play().catch(() => {
+        speakText(questionTextEl.textContent.trim(), handleQuestionEnd);
+      });
+    } else {
+      const handleQuestionEnd = () => {
+        if (statusEl) statusEl.textContent = 'Question finished. Please answer now.';
+        answerTextarea.focus();
+        setAnswerStatus('Ready to listen. Speak now or type your answer.');
+        startSpeechRecognition();
+      };
+      speakText(questionTextEl.textContent.trim(), handleQuestionEnd);
+    }
+  }
+
+
+  async function handleAnswerSubmission(answer) {
+    if (!answer) {
+      speechError.textContent = 'Please provide your answer before submitting.';
+      return null;
+    }
+
+    stopSpeechRecognition();
+    if (statusEl) statusEl.textContent = 'Processing your answer...';
+    const result = await submitAnswer(answer);
+    if (!result) return null;
+
+    if (result.done) {
+      window.location.href = result.redirect;
+      return null;
+    }
+
+    questionTextEl.textContent = result.question;
+    answerTextarea.value = '';
+    speechError.textContent = '';
+    setAnswerStatus('');
+    updateAvatarVideo(result.video_path);
+    return result;
+  }
+
+  answerForm.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    await handleAnswerSubmission(answerTextarea.value.trim());
+  });
+
+  answerTextarea.addEventListener('keydown', async (event) => {
+    if (event.key === 'Enter' && !event.shiftKey && !event.altKey && !event.ctrlKey) {
+      event.preventDefault();
+      await handleAnswerSubmission(answerTextarea.value.trim());
+    }
+  });
+</script>
+{% endblock %}
