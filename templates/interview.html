@@ -1,365 +1,276 @@
-{% extends "base.html" %}
+{% extends 'base.html' %}
 
 {% block content %}
 <div class="card">
-  <h2 id="question-heading">Interview Question</h2>
+  <div class="stage-head">
+    <h2>Question {{ current }} of {{ total }}</h2>
+    <div class="cue-strip" id="cue-strip">
+      {% for i in range(1, total + 1) %}
+        <span class="cue-dot {% if i < current %}done{% elif i == current %}current{% endif %}"></span>
+      {% endfor %}
+    </div>
+  </div>
+
   <div class="question" id="question-text">{{ question }}</div>
 
   <div class="video-grid">
-
-    <!-- AI Interviewer -->
     <div class="review-card interviewer-card">
-      <div class="interviewer-card-header">AI Interviewer</div>
-      <div class="interviewer-avatar">
-
-        {% if video_path %}
-          {% if video_path.endswith('.mp4') %}
-            <video
-              id="avatar-video"
-              autoplay
-              playsinline
-              style="width:240px; height:240px; border-radius:50%; border:4px solid #7c3aed; object-fit:cover; box-shadow: 0 0 25px rgba(124,58,237,0.5);"
-            >
-              <source src="{{ video_path }}" type="video/mp4">
-            </video>
-          {% else %}
-            <img
-              id="avatar-image"
-              src="{{ video_path }}"
-              alt="Interviewer"
-              style="width:240px; height:240px; border-radius:50%; border:4px solid #7c3aed; object-fit:cover; box-shadow: 0 0 25px rgba(124,58,237,0.5);"
-            />
-          {% endif %}
-        {% else %}
-          <div class="avatar-placeholder">
-            <div class="avatar-circle" id="avatar-circle">AI</div>
-          </div>
-        {% endif %}
-
+      <div class="interviewer-card-header">Interviewer</div>
+      <div class="interviewer-avatar interview-face" id="interviewer-avatar-img">
+        <svg class="interviewer-avatar-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M12 15a3.5 3.5 0 0 0 3.5-3.5v-5a3.5 3.5 0 0 0-7 0v5A3.5 3.5 0 0 0 12 15Z" stroke="currentColor" stroke-width="1.4"/>
+          <path d="M6.5 11.5a5.5 5.5 0 0 0 11 0" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+          <path d="M12 17v3.2M9 20.2h6" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+        </svg>
+        <div class="avatar-expression" id="avatar-expression"></div>
+        <div class="avatar-fallback" id="avatar-fallback">AI</div>
+        <div class="speaking-mouth" id="speaking-mouth"></div>
         <div class="voice-waves" id="voice-waves">
-          <span></span><span></span><span></span>
+          <span></span>
+          <span></span>
+          <span></span>
         </div>
       </div>
-
       <div class="interviewer-details">
-        <div class="interviewer-name">Infrabeat Agent</div>
+        <div class="interviewer-name">Sourabh Kumbhar</div>
         <div class="interviewer-role">Hiring Manager</div>
-        <div class="interviewer-status" id="interviewer-status">
-          {% if video_path %}
-            Watch the interviewer ask your question.
-          {% else %}
-            Click Speak Question to hear the question.
-          {% endif %}
-        </div>
+        <div class="interviewer-status" id="interviewer-status">Ready to ask your questions.</div>
+        <div class="interviewer-speech-bubble" id="interviewer-speech-bubble">Sourabh is speaking...</div>
       </div>
-
-      {% if not video_path %}
-        <button type="button" class="button" id="speak-btn" style="margin-top:15px;">
-          🔊 Speak Question
-        </button>
-      {% endif %}
     </div>
 
-    <!-- User Camera -->
     <div class="review-card camera-card">
-      <div class="interviewer-card-header">Your Camera</div>
+      <div class="interviewer-card-header">Your camera</div>
       <video id="camera-preview" autoplay muted playsinline></video>
-      <div id="camera-status" class="camera-status">
-        Click enable camera to start your video.
-      </div>
-      <button type="button" id="enable-camera" class="button secondary">
-        Enable Camera
-      </button>
+      <div id="camera-status" class="camera-status">Click enable camera to start your video.</div>
+      <button type="button" id="enable-camera" class="button secondary block">Enable camera</button>
       <div id="camera-error" class="camera-error"></div>
-      <p class="hint">Allow camera access for a face-to-face interview view.</p>
+      <p class="hint">Allow camera access for a face-to-face interview view. Nothing is recorded or uploaded.</p>
     </div>
-
   </div>
 
-  <!-- Answer Form -->
-  <form id="answer-form">
-    <label for="answer">Your Answer:</label>
-    <textarea
-      id="answer"
-      name="answer"
-      rows="6"
-      placeholder="Speak your answer or type it here..."
-    ></textarea>
-    <div id="answer-status" style="margin-top:8px; font-size:0.92rem; color:#666;">
-      Your speech will be recognized after the question finishes. Click Submit Answer when ready to proceed.
-    </div>
-    <button type="submit" class="button" style="margin-top:12px;">
-      Submit Answer
-    </button>
-  </form>
+  <div class="speech-controls">
+    <button type="button" id="play-question" class="secondary">Speak question</button>
+    <div id="speech-error" class="camera-error"></div>
+    <div id="debug-log" class="debug-log"></div>
+  </div>
 
-  <div id="speech-error" class="camera-error"></div>
-  <div id="debug-log" class="debug-log"></div>
+  <form id="answer-form" class="answer-block">
+    <label for="answer">Your answer</label>
+    <textarea id="answer" name="answer" rows="8" placeholder="Type your answer here..."></textarea>
+    <button type="submit" class="block">Submit answer</button>
+  </form>
 </div>
 
 <script>
-  const cameraPreview = document.getElementById('camera-preview');
+  const video = document.getElementById('camera-preview');
   const cameraError = document.getElementById('camera-error');
   const cameraStatus = document.getElementById('camera-status');
-  const enableCameraBtn = document.getElementById('enable-camera');
+  const enableCameraButton = document.getElementById('enable-camera');
   const speechError = document.getElementById('speech-error');
+  const debugLog = document.getElementById('debug-log');
   const answerForm = document.getElementById('answer-form');
   const answerTextarea = document.getElementById('answer');
   const questionTextEl = document.getElementById('question-text');
+  const interviewerAvatarEl = document.getElementById('interviewer-avatar-img');
   const statusEl = document.getElementById('interviewer-status');
-  const answerStatus = document.getElementById('answer-status');
-  const speakBtn = document.getElementById('speak-btn');
-  const avatarVideo = document.getElementById('avatar-video');
+  const speechBubble = document.getElementById('interviewer-speech-bubble');
+  const currentQuestionLabel = document.querySelector('h2');
+  const cueStrip = document.getElementById('cue-strip');
   const sessionId = '{{ session_id }}';
+  const interviewerName = 'Sourabh';
+  const totalQuestions = {{ total }};
 
-  // ── VOICE (fallback when no video) ─────────────────
-  function speakText(text, onEndCallback) {
-    if (!window.speechSynthesis) return;
-    window.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.rate = 0.95;
-    utterance.pitch = 1;
-    utterance.volume = 1;
-    const voices = window.speechSynthesis.getVoices();
-    const engVoice = voices.find(v => v.lang.startsWith('en'));
-    if (engVoice) utterance.voice = engVoice;
-    utterance.onstart = () => {
-      if (statusEl) statusEl.textContent = 'Infrabeat Agent is speaking...';
-    };
-    utterance.onend = () => {
-      if (statusEl) statusEl.textContent = 'Now please answer the question.';
-      if (typeof onEndCallback === 'function') {
-        onEndCallback();
-      }
-    };
-    window.speechSynthesis.speak(utterance);
+  function logDebug(message) {
+    console.log(message);
+    if (debugLog) {
+      debugLog.textContent += message + '\n';
+    }
   }
 
-  window.speechSynthesis.onvoiceschanged = () => {
-    window.speechSynthesis.getVoices();
-  };
-
-  if (speakBtn) {
-    speakBtn.addEventListener('click', () => {
-      speakText(questionTextEl.textContent.trim());
+  function updateCueStrip(current) {
+    if (!cueStrip) return;
+    const dots = cueStrip.querySelectorAll('.cue-dot');
+    dots.forEach((dot, index) => {
+      const step = index + 1;
+      dot.classList.remove('done', 'current');
+      if (step < current) dot.classList.add('done');
+      else if (step === current) dot.classList.add('current');
     });
   }
 
-  function setAnswerStatus(text) {
-    if (answerStatus) answerStatus.textContent = text;
+  function setQuestion(question, current, total) {
+    questionTextEl.textContent = question;
+    if (currentQuestionLabel) {
+      currentQuestionLabel.textContent = `Question ${current} of ${total}`;
+    }
+    updateCueStrip(current);
   }
 
-  function getSpeechRecognition() {
-    const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!Recognition) return null;
+  function speakText(text) {
+    if (!speechError) return;
+    speechError.textContent = '';
+    if (statusEl) statusEl.textContent = `${interviewerName} is speaking...`;
 
-    const recognition = new Recognition();
-    recognition.continuous = false;
-    recognition.interimResults = false;
-    recognition.lang = 'en-US';
-    recognition.maxAlternatives = 1;
-    return recognition;
-  }
-
-  let recognition = null;
-  let speechRecognitionActive = false;
-
-  async function startSpeechRecognition() {
-    if (speechRecognitionActive) return;
-    if (!recognition) recognition = getSpeechRecognition();
-    if (!recognition) {
-      setAnswerStatus('Speech recognition not supported. Type your answer and press Enter.');
+    if (!window.speechSynthesis) {
+      speechError.textContent = 'Speech synthesis is not supported by your browser.';
+      logDebug('Speech synthesis not supported');
+      if (statusEl) statusEl.textContent = 'Unable to speak from this browser.';
       return;
     }
 
-    recognition.onstart = () => {
-      speechRecognitionActive = true;
-      setAnswerStatus('Listening for your answer...');
-      if (statusEl) statusEl.textContent = 'Listening for your answer...';
-    };
-
-    recognition.onresult = async (event) => {
-      const transcript = Array.from(event.results)
-        .map(result => result[0].transcript)
-        .join(' ');
-      answerTextarea.value = transcript;
-      setAnswerStatus('Speech recognized. Click Submit Answer to proceed.');
-    };
-
-    recognition.onspeechend = () => {
-      setAnswerStatus('Speech ended. Processing...');
-    };
-
-    recognition.onend = () => {
-      speechRecognitionActive = false;
-    };
-
-    recognition.onerror = (event) => {
-      speechRecognitionActive = false;
-      setAnswerStatus('Voice recognition failed. Please type your answer and press Enter.');
-      if (statusEl) statusEl.textContent = 'Voice recognition failed.';
-      console.error('Speech recognition error', event.error || event);
-    };
+    const utterance = new SpeechSynthesisUtterance(`${interviewerName} asks: ${text}`);
+    utterance.rate = 1;
+    utterance.pitch = 1;
+    utterance.volume = 1;
 
     try {
-      recognition.start();
+      const voices = window.speechSynthesis.getVoices ? window.speechSynthesis.getVoices() : [];
+      for (let v of voices) {
+        if (v.lang && v.lang.startsWith('en')) {
+          utterance.voice = v;
+          break;
+        }
+      }
+    } catch (e) {
+      logDebug('Voice selection error: ' + e);
+    }
+
+    const interviewerCard = interviewerAvatarEl ? interviewerAvatarEl.closest('.interviewer-card') : null;
+
+    try {
+      if (interviewerCard) interviewerCard.classList.add('speaking');
+      if (speechBubble) speechBubble.classList.add('visible');
+
+      utterance.onend = () => {
+        if (interviewerCard) interviewerCard.classList.remove('speaking');
+        if (speechBubble) speechBubble.classList.remove('visible');
+        if (statusEl) statusEl.textContent = 'Now please answer the question.';
+        logDebug('Speech ended');
+      };
+
+      utterance.onerror = (e) => {
+        if (interviewerCard) interviewerCard.classList.remove('speaking');
+        if (speechBubble) speechBubble.classList.remove('visible');
+        if (statusEl) statusEl.textContent = 'Speech failed. Please try again.';
+        logDebug('Speech error event: ' + e);
+      };
+
+      window.speechSynthesis.cancel();
+      window.speechSynthesis.speak(utterance);
     } catch (error) {
-      setAnswerStatus('Unable to start speech recognition. Type your answer and press Enter.');
-      console.error('Speech recognition start error', error);
+      if (interviewerCard) interviewerCard.classList.remove('speaking');
+      speechError.textContent = 'Speech playback failed. Please try again.';
+      if (statusEl) statusEl.textContent = 'Speech failed. Please try again.';
+      logDebug('Speech error: ' + error);
     }
   }
 
-  function stopSpeechRecognition() {
-    if (recognition && speechRecognitionActive) {
-      recognition.abort();
-      speechRecognitionActive = false;
-    }
-  }
-
-  function scheduleSpeechRecognition() {
-    if (avatarVideo) {
-      avatarVideo.addEventListener('ended', () => {
-        if (statusEl) statusEl.textContent = 'Question finished. Please answer now.';
-        answerTextarea.focus();
-        setAnswerStatus('Ready to listen. Speak now or type your answer.');
-        startSpeechRecognition();
-      });
-    } else {
-      window.addEventListener('load', () => {
-        const utterance = new SpeechSynthesisUtterance(questionTextEl.textContent.trim());
-        utterance.rate = 0.95;
-        utterance.pitch = 1;
-        utterance.volume = 1;
-        const voices = window.speechSynthesis.getVoices();
-        const engVoice = voices.find(v => v.lang.startsWith('en'));
-        if (engVoice) utterance.voice = engVoice;
-        utterance.onstart = () => {
-          if (statusEl) statusEl.textContent = 'Infrabeat Agent is speaking...';
-        };
-        utterance.onend = () => {
-          if (statusEl) statusEl.textContent = 'Now please answer the question.';
-          setAnswerStatus('Ready to listen. Speak now or type your answer.');
-          startSpeechRecognition();
-        };
-        window.speechSynthesis.speak(utterance);
-      });
-    }
-  }
-
-  scheduleSpeechRecognition();
-
-  // ── CAMERA ─────────────────────────────────────────
   function initCamera() {
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-      cameraError.textContent = 'Camera not supported.';
+      cameraError.textContent = 'Camera access is not supported by your browser.';
+      if (cameraStatus) cameraStatus.textContent = 'Camera unsupported.';
+      logDebug('navigator.mediaDevices.getUserMedia unavailable');
       return;
     }
-    cameraStatus.textContent = 'Requesting camera access...';
+
+    cameraError.textContent = '';
+    if (cameraStatus) cameraStatus.textContent = 'Requesting camera access...';
+
     navigator.mediaDevices.getUserMedia({ video: true, audio: false })
       .then(stream => {
-        cameraPreview.srcObject = stream;
-        cameraPreview.play().catch(() => {});
-        cameraStatus.textContent = 'Camera enabled.';
+        video.srcObject = stream;
+        video.play().catch(() => {
+          logDebug('Video play promise rejected or autoplay blocked');
+        });
+        if (cameraStatus) cameraStatus.textContent = 'Camera enabled. You can see yourself here.';
+        logDebug('Camera stream started');
       })
-      .catch(() => {
-        cameraError.textContent = 'Camera access denied.';
-        cameraStatus.textContent = 'Camera unavailable.';
+      .catch(error => {
+        cameraError.textContent = 'Camera access denied or unavailable.';
+        if (cameraStatus) cameraStatus.textContent = 'Camera access was denied or unavailable.';
+        logDebug('Camera unavailable: ' + error);
       });
   }
 
-  enableCameraBtn.addEventListener('click', () => initCamera());
-
-  // ── SUBMIT ANSWER ──────────────────────────────────
   async function submitAnswer(answer) {
     try {
       const response = await fetch(`/answer/${sessionId}`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json'
+        },
         body: JSON.stringify({ answer })
       });
-      if (!response.ok) throw new Error('Submission failed');
+
+      if (!response.ok) {
+        const json = await response.json();
+        throw new Error(json.error || 'Submission failed');
+      }
+
       return await response.json();
     } catch (error) {
+      logDebug('Answer submit error: ' + error);
       speechError.textContent = error.message;
       return null;
     }
   }
 
-  // Update avatar video for next question
-  function updateAvatarVideo(videoPath) {
-    stopSpeechRecognition();
-    if (statusEl) statusEl.textContent = 'Loading next question...';
-    setAnswerStatus('');
-    
-    if (avatarVideo && videoPath) {
-      const handleQuestionEnd = () => {
-        if (statusEl) statusEl.textContent = 'Question finished. Please answer now.';
-        answerTextarea.focus();
-        setAnswerStatus('Ready to listen. Speak now or type your answer.');
-        startSpeechRecognition();
-      };
-      
-      avatarVideo.onloadedmetadata = () => {
-        if (statusEl) statusEl.textContent = 'Watch the interviewer ask your question.';
-      };
-      
-      avatarVideo.onended = handleQuestionEnd;
-      
-      avatarVideo.onerror = () => {
-        speakText(questionTextEl.textContent.trim(), handleQuestionEnd);
-      };
-      
-      avatarVideo.src = `/static/${videoPath}`;
-      avatarVideo.load();
-      avatarVideo.play().catch(() => {
-        speakText(questionTextEl.textContent.trim(), handleQuestionEnd);
-      });
-    } else {
-      const handleQuestionEnd = () => {
-        if (statusEl) statusEl.textContent = 'Question finished. Please answer now.';
-        answerTextarea.focus();
-        setAnswerStatus('Ready to listen. Speak now or type your answer.');
-        startSpeechRecognition();
-      };
-      speakText(questionTextEl.textContent.trim(), handleQuestionEnd);
-    }
-  }
-
-
-  async function handleAnswerSubmission(answer) {
+  answerForm.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const answer = answerTextarea.value.trim();
     if (!answer) {
-      speechError.textContent = 'Please provide your answer before submitting.';
-      return null;
+      speechError.textContent = 'Please type your answer before submitting.';
+      return;
     }
 
-    stopSpeechRecognition();
-    if (statusEl) statusEl.textContent = 'Processing your answer...';
     const result = await submitAnswer(answer);
-    if (!result) return null;
+    if (!result) return;
 
     if (result.done) {
       window.location.href = result.redirect;
-      return null;
+      return;
     }
 
-    questionTextEl.textContent = result.question;
+    setQuestion(result.question, result.current, result.total);
     answerTextarea.value = '';
-    speechError.textContent = '';
-    setAnswerStatus('');
-    updateAvatarVideo(result.video_path);
-    return result;
-  }
-
-  answerForm.addEventListener('submit', async (event) => {
-    event.preventDefault();
-    await handleAnswerSubmission(answerTextarea.value.trim());
+    speakText(result.question);
   });
 
-  answerTextarea.addEventListener('keydown', async (event) => {
-    if (event.key === 'Enter' && !event.shiftKey && !event.altKey && !event.ctrlKey) {
-      event.preventDefault();
-      await handleAnswerSubmission(answerTextarea.value.trim());
+  document.addEventListener('DOMContentLoaded', () => {
+    const playButton = document.getElementById('play-question');
+    const questionText = questionTextEl?.textContent || '';
+
+    updateCueStrip({{ current }});
+
+    if (playButton) {
+      playButton.addEventListener('click', () => {
+        speakText(questionText);
+      });
+      logDebug('Play button event attached');
+    } else {
+      logDebug('Play button not found');
     }
+
+    if (enableCameraButton) {
+      enableCameraButton.addEventListener('click', () => initCamera());
+    }
+
+    if (speechBubble) {
+      speechBubble.classList.remove('visible');
+    }
+
+    if (questionText && statusEl) {
+      statusEl.textContent = 'Click Speak question to hear the interviewer.';
+    }
+  });
+
+  window.addEventListener('error', event => {
+    logDebug('Window error: ' + event.message);
+  });
+
+  window.addEventListener('unhandledrejection', event => {
+    logDebug('Unhandled promise rejection: ' + event.reason);
   });
 </script>
 {% endblock %}

@@ -3,30 +3,44 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>AI CLI Interviewer</title>
+  <title>{% block title %}AI Interviewer{% endblock %}</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
 </head>
 <body>
-  <header>
-    <h1>AI Interviewer</h1>
-    <p>Upload your resume or paste your resume text to begin.</p>
+  <header class="site-header">
+    <div class="brand">
+      <div class="brand-mark">
+        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M12 15a3.5 3.5 0 0 0 3.5-3.5v-5a3.5 3.5 0 0 0-7 0v5A3.5 3.5 0 0 0 12 15Z" stroke="#1a1305" stroke-width="1.6"/>
+          <path d="M6.5 11.5a5.5 5.5 0 0 0 11 0" stroke="#1a1305" stroke-width="1.6" stroke-linecap="round"/>
+          <path d="M12 17v3.2M9 20.2h6" stroke="#1a1305" stroke-width="1.6" stroke-linecap="round"/>
+        </svg>
+      </div>
+      <div class="brand-text">
+        <span class="name">AI Interviewer</span>
+        <span class="tagline">Rehearsal room</span>
+      </div>
+    </div>
+    <p class="header-note">Practice out loud, get honest feedback, walk into the real thing warmed up.</p>
   </header>
 
   <main>
-    {% with messages = get_flashed_messages(with_categories=true) %}
-      {% if messages %}
-        <div class="messages">
-          {% for category, message in messages %}
-            <div class="message {{ category }}">{{ message }}</div>
-          {% endfor %}
-        </div>
-      {% endif %}
-    {% endwith %}
+    <div class="shell">
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+          <div class="messages">
+            {% for category, message in messages %}
+              <div class="message {{ category }}">{{ message }}</div>
+            {% endfor %}
+          </div>
+        {% endif %}
+      {% endwith %}
 
-    {% block content %}{% endblock %}
+      {% block content %}{% endblock %}
+    </div>
   </main>
 
-  <footer>
+  <footer class="site-footer">
     <p>Local web frontend for the AI interviewer project.</p>
   </footer>
 </body>

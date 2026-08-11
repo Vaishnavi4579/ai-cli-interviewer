@@ -1,27 +1,76 @@
-{% extends "base.html" %}
+{% extends 'base.html' %}
 
 {% block content %}
-<div class="card">
-  <h2>Upload Your Resume</h2>
-  <p>Upload your resume and start your AI-powered mock interview.</p>
+<div class="hero">
+  <div class="hero-copy">
+    <div class="hero-eyebrow">Mock interview</div>
+    <h1>Walk in warmed up, not cold.</h1>
+    <p class="lede">
+      Share your resume and an AI interviewer will ask you real questions about it,
+      out loud, on camera — then tell you honestly how each answer landed.
+    </p>
+    <ol class="steps">
+      <li>
+        <span class="step-index">1</span>
+        <div class="step-copy">
+          <div class="step-title">Add your resume</div>
+          <div class="step-desc">Upload a PDF or DOCX, or paste the text in.</div>
+        </div>
+      </li>
+      <li>
+        <span class="step-index">2</span>
+        <div class="step-copy">
+          <div class="step-title">Answer three questions</div>
+          <div class="step-desc">Spoken aloud by the interviewer, on your own camera.</div>
+        </div>
+      </li>
+      <li>
+        <span class="step-index">3</span>
+        <div class="step-copy">
+          <div class="step-title">Read your feedback</div>
+          <div class="step-desc">A short evaluation of each answer, right after.</div>
+        </div>
+      </li>
+    </ol>
+  </div>
 
-  <form action="/interview" method="POST" enctype="multipart/form-data">
+  <div class="card">
+    <h2>Start a session</h2>
+    <form method="POST" enctype="multipart/form-data">
+      <div class="tabs" role="tablist">
+        <button type="button" class="tab-btn active" data-tab="upload" role="tab" aria-selected="true">Upload file</button>
+        <button type="button" class="tab-btn" data-tab="paste" role="tab" aria-selected="false">Paste text</button>
+      </div>
 
-    <div class="upload-area">
-      <label for="resume">Select Resume (PDF or DOCX)</label>
-      <input
-        type="file"
-        id="resume"
-        name="resume"
-        accept=".pdf,.docx"
-        required
-      />
-    </div>
+      <div class="tab-panel active" data-panel="upload">
+        <label for="resume_file">Resume file</label>
+        <input type="file" id="resume_file" name="resume_file" accept=".pdf,.docx" />
+        <p class="field-hint">PDF or DOCX, up to a few pages.</p>
+      </div>
 
-    <button type="submit" class="button">
-      Start Interview
-    </button>
+      <div class="tab-panel" data-panel="paste">
+        <label for="resume_text">Resume text</label>
+        <textarea id="resume_text" name="resume_text" rows="10" placeholder="Paste your resume content here..."></textarea>
+      </div>
 
-  </form>
+      <button type="submit" class="block">Start interview</button>
+    </form>
+  </div>
 </div>
+
+<script>
+  const tabButtons = document.querySelectorAll('.tab-btn');
+  const tabPanels = document.querySelectorAll('.tab-panel');
+
+  tabButtons.forEach((btn) => {
+    btn.addEventListener('click', () => {
+      tabButtons.forEach((b) => { b.classList.remove('active'); b.setAttribute('aria-selected', 'false'); });
+      tabPanels.forEach((p) => p.classList.remove('active'));
+
+      btn.classList.add('active');
+      btn.setAttribute('aria-selected', 'true');
+      document.querySelector(`.tab-panel[data-panel="${btn.dataset.tab}"]`).classList.add('active');
+    });
+  });
+</script>
 {% endblock %}

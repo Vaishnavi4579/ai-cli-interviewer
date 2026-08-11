@@ -2,16 +2,34 @@
 
 {% block content %}
 <div class="card">
-  <h2>Interview Report</h2>
+  <h2>Interview report</h2>
+
   {% for item in items %}
-    <section class="result-item">
-      <h3>Question {{ loop.index }}</h3>
-      <div class="question">{{ item.question }}</div>
-      <div class="answer"><strong>Your answer:</strong><br />{{ item.answer }}</div>
-      <div class="evaluation"><strong>Evaluation:</strong><pre>{{ item.evaluation }}</pre></div>
+    <section class="report-item">
+      <div class="report-item-head">
+        <span class="report-index">{{ loop.index }}</span>
+        <h3>Question {{ loop.index }}</h3>
+      </div>
+
+      <div class="report-block">
+        <div class="report-label">Asked</div>
+        <div class="question-text">{{ item.question }}</div>
+      </div>
+
+      <div class="report-block">
+        <div class="report-label">Your answer</div>
+        <div class="answer-text">{{ item.answer }}</div>
+      </div>
+
+      <div class="report-block">
+        <div class="report-label">Evaluation</div>
+        <div class="evaluation-block"><pre>{{ item.evaluation }}</pre></div>
+      </div>
     </section>
   {% endfor %}
 
-  <a class="button" href="{{ url_for('index') }}">Start New Interview</a>
+  <div class="results-footer">
+    <a class="button" href="{{ url_for('index') }}">Start new interview</a>
+  </div>
 </div>
 {% endblock %}
