@@ -3,12 +3,7 @@
 {% block content %}
 <div class="card">
   <div class="stage-head">
-    <h2>Question {{ current }} of {{ total }}</h2>
-    <div class="cue-strip" id="cue-strip">
-      {% for i in range(1, total + 1) %}
-        <span class="cue-dot {% if i < current %}done{% elif i == current %}current{% endif %}"></span>
-      {% endfor %}
-    </div>
+    <h2>Question</h2>
   </div>
 
   <div class="question" id="question-text">{{ question }}</div>
@@ -55,11 +50,14 @@
     <div id="debug-log" class="debug-log"></div>
   </div>
 
-  <form id="answer-form" class="answer-block">
-    <label for="answer">Your answer</label>
-    <textarea id="answer" name="answer" rows="8" placeholder="Type your answer here..."></textarea>
-    <button type="submit" class="block">Submit answer</button>
-  </form>
+  <div id="answer-ui" class="answer-block">
+    <div id="listening-status" style="font-weight:600; margin-bottom:8px;">Preparing microphone…</div>
+    <div id="transcript" style="min-height:80px; padding:8px; border:1px solid #eee; background:#fafafa;">(Speak your answer aloud when the interviewer finishes speaking.)</div>
+    <div style="margin-top:10px;">
+      <button id="manual-submit" class="block" style="display:none;">Submit answer</button>
+    </div>
+    <div id="speech-unsupported" style="color:#a00; display:none; margin-top:8px;">Your browser does not support voice input. Please use Chrome or Edge, or use the CLI fallback.</div>
+  </div>
 </div>
 
 <script>
@@ -69,17 +67,18 @@
   const enableCameraButton = document.getElementById('enable-camera');
   const speechError = document.getElementById('speech-error');
   const debugLog = document.getElementById('debug-log');
-  const answerForm = document.getElementById('answer-form');
-  const answerTextarea = document.getElementById('answer');
   const questionTextEl = document.getElementById('question-text');
   const interviewerAvatarEl = document.getElementById('interviewer-avatar-img');
   const statusEl = document.getElementById('interviewer-status');
   const speechBubble = document.getElementById('interviewer-speech-bubble');
-  const currentQuestionLabel = document.querySelector('h2');
-  const cueStrip = document.getElementById('cue-strip');
   const sessionId = '{{ session_id }}';
   const interviewerName = 'Sourabh';
-  const totalQuestions = {{ total }};
+
+  // Update question text only — no total/current shown in UI
+  function setQuestion(question) {
+    if (questionTextEl) questionTextEl.textContent = question;
+    if (statusEl) statusEl.textContent = 'Click Speak question to hear the interviewer.';
+  }
 
   function logDebug(message) {
     console.log(message);
@@ -88,24 +87,7 @@
     }
   }
 
-  function updateCueStrip(current) {
-    if (!cueStrip) return;
-    const dots = cueStrip.querySelectorAll('.cue-dot');
-    dots.forEach((dot, index) => {
-      const step = index + 1;
-      dot.classList.remove('done', 'current');
-      if (step < current) dot.classList.add('done');
-      else if (step === current) dot.classList.add('current');
-    });
-  }
-
-  function setQuestion(question, current, total) {
-    questionTextEl.textContent = question;
-    if (currentQuestionLabel) {
-      currentQuestionLabel.textContent = `Question ${current} of ${total}`;
-    }
-    updateCueStrip(current);
-  }
+  // cue-strip and question count removed — setQuestion above handles UI update
 
   function speakText(text) {
     if (!speechError) return;
@@ -142,12 +124,14 @@
       if (interviewerCard) interviewerCard.classList.add('speaking');
       if (speechBubble) speechBubble.classList.add('visible');
 
-      utterance.onend = () => {
-        if (interviewerCard) interviewerCard.classList.remove('speaking');
-        if (speechBubble) speechBubble.classList.remove('visible');
-        if (statusEl) statusEl.textContent = 'Now please answer the question.';
-        logDebug('Speech ended');
-      };
+        utterance.onend = () => {
+          if (interviewerCard) interviewerCard.classList.remove('speaking');
+          if (speechBubble) speechBubble.classList.remove('visible');
+          if (statusEl) statusEl.textContent = 'Now please answer the question.';
+          logDebug('Speech ended');
+          // Start listening for the candidate's spoken answer
+          startListeningForAnswer();
+        };
 
       utterance.onerror = (e) => {
         if (interviewerCard) interviewerCard.classList.remove('speaking');
@@ -163,6 +147,71 @@
       speechError.textContent = 'Speech playback failed. Please try again.';
       if (statusEl) statusEl.textContent = 'Speech failed. Please try again.';
       logDebug('Speech error: ' + error);
+    }
+  }
+
+  // SpeechRecognition-based listening for spoken answers
+  let recognition = null;
+  let finalTranscript = '';
+  function startListeningForAnswer() {
+    const statusElLocal = document.getElementById('listening-status');
+    const transcriptEl = document.getElementById('transcript');
+
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      if (statusElLocal) statusElLocal.textContent = '';
+      const unsupported = document.getElementById('speech-unsupported');
+      if (unsupported) unsupported.style.display = 'block';
+      return;
+    }
+
+    recognition = new SpeechRecognition();
+    recognition.lang = 'en-US';
+    recognition.interimResults = true;
+    recognition.maxAlternatives = 1;
+    recognition.continuous = false;
+
+    finalTranscript = '';
+    if (statusElLocal) statusElLocal.textContent = 'Listening... Please speak your answer.';
+    if (transcriptEl) transcriptEl.textContent = '';
+
+    recognition.onresult = (event) => {
+      let interim = '';
+      for (let i = event.resultIndex; i < event.results.length; ++i) {
+        const res = event.results[i];
+        if (res.isFinal) {
+          finalTranscript += res[0].transcript.trim() + ' ';
+        } else {
+          interim += res[0].transcript;
+        }
+      }
+      if (transcriptEl) transcriptEl.textContent = finalTranscript + interim;
+    };
+
+    recognition.onerror = (e) => {
+      logDebug('Speech recognition error: ' + e.error);
+      if (statusElLocal) statusElLocal.textContent = 'Speech recognition error. Please try again.';
+    };
+
+    recognition.onend = async () => {
+      if (statusElLocal) statusElLocal.textContent = 'Processing answer...';
+      const answer = finalTranscript.trim();
+      logDebug('Final transcript: ' + answer);
+      const result = await submitAnswer(answer);
+      if (!result) return;
+      if (result.done) {
+        window.location.href = result.redirect;
+        return;
+      }
+      setQuestion(result.question);
+      if (transcriptEl) transcriptEl.textContent = '';
+      setTimeout(() => speakText(result.question), 800);
+    };
+
+    try {
+      recognition.start();
+    } catch (e) {
+      logDebug('Recognition start error: ' + e);
     }
   }
 
@@ -216,32 +265,33 @@
     }
   }
 
-  answerForm.addEventListener('submit', async (event) => {
-    event.preventDefault();
-    const answer = answerTextarea.value.trim();
-    if (!answer) {
-      speechError.textContent = 'Please type your answer before submitting.';
-      return;
-    }
-
-    const result = await submitAnswer(answer);
-    if (!result) return;
-
-    if (result.done) {
-      window.location.href = result.redirect;
-      return;
-    }
-
-    setQuestion(result.question, result.current, result.total);
-    answerTextarea.value = '';
-    speakText(result.question);
-  });
+  // Manual submit fallback (hidden by default)
+  const manualBtn = document.getElementById('manual-submit');
+  if (manualBtn) {
+    manualBtn.addEventListener('click', async () => {
+      const transcriptEl = document.getElementById('transcript');
+      const answer = transcriptEl ? transcriptEl.textContent.trim() : '';
+      const result = await submitAnswer(answer);
+      if (!result) return;
+      if (result.done) {
+        window.location.href = result.redirect;
+        return;
+      }
+      setQuestion(result.question);
+      setTimeout(() => speakText(result.question), 800);
+    });
+  }
 
   document.addEventListener('DOMContentLoaded', () => {
     const playButton = document.getElementById('play-question');
     const questionText = questionTextEl?.textContent || '';
 
-    updateCueStrip({{ current }});
+    // Auto-speak the first question when the page loads
+    if (questionText) {
+      // Slight delay to allow TTS voices to load
+      setTimeout(() => speakText(questionText), 400);
+      logDebug('Auto-speaking first question');
+    }
 
     if (playButton) {
       playButton.addEventListener('click', () => {

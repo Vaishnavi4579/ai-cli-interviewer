@@ -11,6 +11,10 @@ load_dotenv()
 app = Flask(__name__)
 app.secret_key = os.urandom(24)
 
+# Total number of interview questions per session (configurable via env)
+# Optional safety cap on number of questions to avoid runaway sessions (not shown to user)
+MAX_QUESTIONS = int(os.getenv("MAX_QUESTIONS", "20"))
+
 UPLOAD_FOLDER = "uploads"
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
@@ -40,13 +44,17 @@ def home():
 @app.route("/interview", methods=["POST"])
 def interview():
     file = request.files.get("resume")
-    if not file:
-        return "No file uploaded", 400
-
-    filepath = os.path.join(UPLOAD_FOLDER, file.filename)
-    file.save(filepath)
-
-    resume_text = extract_resume_text(filepath)
+    # Support either an uploaded file (PDF/DOCX) or pasted resume text
+    if file:
+        filepath = os.path.join(UPLOAD_FOLDER, file.filename)
+        file.save(filepath)
+        resume_text = extract_resume_text(filepath)
+    else:
+        # Check for pasted resume text in the form
+        pasted = request.form.get("resume_text", "").strip()
+        if not pasted:
+            return "No file uploaded or resume text provided", 400
+        resume_text = pasted
     job_description = load_job_description()
     use_previous_context = load_use_previous_context()
 
@@ -72,17 +80,15 @@ def interview():
         question=question,
         video_path=video_path,
         session_id="default",
-        job_description=job_description
+        job_description=job_description,
     )
 
 
 @app.route("/answer/<session_id>", methods=["POST"])
 def answer(session_id):
     data = request.get_json()
+    # Accept empty answers to support auto-advance (skip) from the frontend
     user_answer = data.get("answer", "")
-
-    if not user_answer:
-        return jsonify({"error": "No answer provided"}), 400
 
     resume_text = session.get("resume_text", "")
     job_description = session.get("job_description", "") or load_job_description()
@@ -95,7 +101,8 @@ def answer(session_id):
         answer_history.append(user_answer)
         session["answer_history"] = answer_history
 
-    if len(answer_history) >= 10:
+    # mark completion when we've reached the safety cap
+    if len(answer_history) >= MAX_QUESTIONS:
         return jsonify({
             "question": "",
             "video_path": "",
@@ -146,4 +153,8 @@ def result():
 
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    # Allow toggling debug/reloader via FLASK_DEBUG env var to avoid
+    # continuous restarts when files are edited programmatically.
+    debug_env = os.getenv("FLASK_DEBUG", "1").strip().lower()
+    debug = debug_env in {"1", "true", "yes"}
+    app.run(debug=debug, use_reloader=debug)
